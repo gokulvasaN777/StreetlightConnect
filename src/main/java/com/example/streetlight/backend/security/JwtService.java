@@ -1,6 +1,8 @@
 package com.example.streetlight.backend.security;
 
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -18,18 +20,29 @@ public class JwtService {
 
     public JwtService(
             @Value("${app.jwt.secret}") String secret,
-            @Value("${app.jwt.expiration}") long expiration
+            @Value("${app.jwt.expiration:86400000}") long expiration
     ) {
-        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
-            throw new IllegalArgumentException(
-                    "JWT secret must contain at least 32 characters"
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "app.jwt.secret is missing"
             );
         }
 
-        this.secretKey = Keys.hmacShaKeyFor(
-                secret.getBytes(StandardCharsets.UTF_8)
-        );
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
 
+        if (secretBytes.length < 32) {
+            throw new IllegalStateException(
+                    "app.jwt.secret must contain at least 32 bytes"
+            );
+        }
+
+        if (expiration <= 0) {
+            throw new IllegalStateException(
+                    "app.jwt.expiration must be greater than zero"
+            );
+        }
+
+        this.secretKey = Keys.hmacShaKeyFor(secretBytes);
         this.expiration = expiration;
     }
 
@@ -46,12 +59,7 @@ public class JwtService {
     }
 
     public String extractUsername(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
+        return parseClaims(token).getSubject();
     }
 
     public boolean isValid(
@@ -61,22 +69,24 @@ public class JwtService {
         try {
             String username = extractUsername(token);
 
-            return username.equals(userDetails.getUsername())
+            return username != null
+                    && username.equalsIgnoreCase(userDetails.getUsername())
                     && !isExpired(token);
-
         } catch (JwtException | IllegalArgumentException exception) {
             return false;
         }
     }
 
     private boolean isExpired(String token) {
-        Date expirationDate = Jwts.parser()
+        Date expirationDate = parseClaims(token).getExpiration();
+        return expirationDate == null || expirationDate.before(new Date());
+    }
+
+    private Claims parseClaims(String token) {
+        return Jwts.parser()
                 .verifyWith(secretKey)
                 .build()
                 .parseSignedClaims(token)
-                .getPayload()
-                .getExpiration();
-
-        return expirationDate.before(new Date());
+                .getPayload();
     }
 }

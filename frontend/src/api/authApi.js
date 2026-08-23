@@ -5,5 +5,5 @@ export function registerUser(data) {
 }
 
 export function loginUser(data) {
-  return apiClient.post("/auth/login", data).then((res) => res.data);
+  return apiClient.post("/api/auth/login", data).then((res) => res.data);
 }

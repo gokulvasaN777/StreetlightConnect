@@ -20,6 +20,10 @@ function statusColor(status) {
   }
 }
 
+function formatStatus(status) {
+  return status?.replaceAll("_", " ") || "UNKNOWN";
+}
+
 function CitizenDashboard() {
   const navigate = useNavigate();
   const email = localStorage.getItem("email");
@@ -60,7 +64,7 @@ function CitizenDashboard() {
       await submitComplaint(form);
       setForm({ location: "", description: "" });
       showToast("Complaint submitted successfully.", "success");
-      loadComplaints();
+      await loadComplaints();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to submit complaint.");
       showToast("Failed to submit complaint.", "error");
@@ -78,11 +82,23 @@ function CitizenDashboard() {
     try {
       await uploadComplaintImage(complaintId, file);
       showToast("Image uploaded successfully.", "success");
-      loadComplaints();
+      await loadComplaints();
     } catch (err) {
       showToast(err.response?.data?.message || "Image upload failed.", "error");
     } finally {
       setUploadingId(null);
+      event.target.value = "";
+    }
+  }
+
+  function openComplaint(complaintId) {
+    navigate(`/complaints/${complaintId}`);
+  }
+
+  function handleComplaintKeyDown(event, complaintId) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openComplaint(complaintId);
     }
   }
 
@@ -118,8 +134,9 @@ function CitizenDashboard() {
           <h3>Report a Streetlight Issue</h3>
 
           <form onSubmit={handleSubmit}>
-            <label>Location</label>
+            <label htmlFor="location">Location</label>
             <input
+              id="location"
               type="text"
               name="location"
               placeholder="e.g. Anna Nagar 5th Street, near Park"
@@ -128,8 +145,9 @@ function CitizenDashboard() {
               required
             />
 
-            <label>Description</label>
+            <label htmlFor="description">Description</label>
             <textarea
+              id="description"
               name="description"
               placeholder="Describe the issue (e.g. light not working since 3 days)"
               rows="4"
@@ -157,14 +175,22 @@ function CitizenDashboard() {
 
           <div className="complaint-list">
             {complaints.map((complaint) => (
-              <div className="complaint-item" key={complaint.id}>
+              <article
+                className="complaint-item complaint-item-clickable"
+                key={complaint.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open complaint for ${complaint.location}`}
+                onClick={() => openComplaint(complaint.id)}
+                onKeyDown={(event) => handleComplaintKeyDown(event, complaint.id)}
+              >
                 <div className="complaint-top">
                   <strong>{complaint.location}</strong>
                   <span
                     className="status-badge"
                     style={{ backgroundColor: statusColor(complaint.status) }}
                   >
-                    {complaint.status.replace("_", " ")}
+                    {formatStatus(complaint.status)}
                   </span>
                 </div>
 
@@ -183,7 +209,11 @@ function CitizenDashboard() {
                   Submitted {timeAgo(complaint.createdAt)}
                 </span>
 
-                <div style={{ marginTop: 10 }}>
+                <div
+                  style={{ marginTop: 10 }}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   {complaint.imagePath ? (
                     <span style={{ fontSize: 12, color: "#16a34a" }}>
                       📷 Image attached
@@ -195,6 +225,7 @@ function CitizenDashboard() {
                         color: "var(--primary)",
                         cursor: "pointer",
                       }}
+                      onClick={(event) => event.stopPropagation()}
                     >
                       {uploadingId === complaint.id
                         ? "Uploading..."
@@ -203,13 +234,15 @@ function CitizenDashboard() {
                         type="file"
                         accept="image/jpeg,image/png"
                         style={{ display: "none" }}
-                        onChange={(e) => handleImageSelect(complaint.id, e)}
+                        onChange={(event) => handleImageSelect(complaint.id, event)}
                         disabled={uploadingId === complaint.id}
                       />
                     </label>
                   )}
                 </div>
-              </div>
+
+                <span className="view-details-hint">View full details →</span>
+              </article>
             ))}
           </div>
         </section>
